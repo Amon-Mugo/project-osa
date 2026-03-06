@@ -1,0 +1,53 @@
+# ── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# ── Virtual environments ──────────────────────────────────────────────────────
+venv/
+env/
+.env
+.venv
+
+# ── Jupyter ───────────────────────────────────────────────────────────────────
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# ── Model files (large binaries — don't commit these) ────────────────────────
+*.pkl
+*.joblib
+*.h5
+*.pt
+*.bin
+*.onnx
+
+# ── Datasets (large files — don't commit these) ───────────────────────────────
+*.csv
+*.tsv
+*.json
+*.parquet
+
+# ── OS files ──────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── IDE ───────────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ── Logs ──────────────────────────────────────────────────────────────────────
+*.log
+logs/
+
+# ── Environment variables ─────────────────────────────────────────────────────
+.env
+.env.local

@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OSA Email Risk Checker</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>OSA Email Risk Checker</h1>
+            <p class="subtitle">Online Scam Awareness – paste an email or message to check for spam/phishing</p>
+        </header>
+
+        <form method="post" action="/predict" class="form">
+            <label for="message">Enter message or email content:</label>
+            <textarea id="message" name="message" rows="6" placeholder="Paste email text or SMS here...">{% if message %}{{ message }}{% endif %}</textarea>
+            <button type="submit">Check Risk</button>
+        </form>
+
+        {% if prediction %}
+        <section class="result">
+            <h2>Result</h2>
+
+            <!-- Label -->
+            <p class="label {% if prediction == 'spam' %}spam{% else %}ham{% endif %}">
+                {% if prediction == 'spam' %}⚠ SPAM / PHISHING DETECTED{% else %}✔ SAFE{% endif %}
+            </p>
+
+            <!-- Probability bar -->
+            <div class="prob-bar-wrap">
+                <div class="prob-bar" style="width: {{ (spam_probability * 100) | round | int }}%;
+                    background: {% if prediction == 'spam' %}#f87171{% else %}#4ade80{% endif %};">
+                </div>
+            </div>
+            <p class="meta">Spam probability: <strong>{{ spam_probability }}</strong> &nbsp;|&nbsp; Threshold: <strong>{{ threshold }}</strong></p>
+
+            <!-- Plain English explanation -->
+            <div class="explanation {% if prediction == 'spam' %}explanation-spam{% else %}explanation-ham{% endif %}">
+                {{ explanation }}
+            </div>
+
+            <!-- Triggers (only shown for spam) -->
+            {% if triggers %}
+            <div class="triggers-section">
+                <h3>⚠ Warning Signs Detected</h3>
+                <div class="triggers-grid">
+                    {% for trigger in triggers %}
+                    <div class="trigger-card">
+                        <div class="trigger-header">
+                            <span class="trigger-icon">{{ trigger.icon }}</span>
+                            <span class="trigger-label">{{ trigger.label }}</span>
+                        </div>
+                        <p class="trigger-desc">{{ trigger.description }}</p>
+                        <div class="trigger-matches">
+                            {% for match in trigger.matches %}
+                            <span class="match-pill">{{ match }}</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Safety tip (only for spam) -->
+            {% if prediction == 'spam' %}
+            <div class="safety-tip">
+                <strong>🛡 Stay Safe:</strong> Do not click any links, share personal details, or send money.
+                If this claims to be from your bank or a company, contact them directly using their official number.
+            </div>
+            {% endif %}
+
+        </section>
+        {% endif %}
+    </div>
+</body>
+</html>
