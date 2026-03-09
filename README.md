@@ -3,7 +3,7 @@
 
 ![Python](https://img.shields.io/badge/Python-3.10+-blue)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-green)
-![License](https://img.shields.io/badge/License-MIT-yellow)
+![Model](https://img.shields.io/badge/Model-DistilBERT-yellow)
 ![Status](https://img.shields.io/badge/Status-Active%20Development-orange)
 
 ---
@@ -16,7 +16,7 @@ dangerous content, but explaining *why* it is dangerous using plain language tha
 can understand.
 
 The platform is built on three pillars:
-1. **Detection** — NLP-based email/SMS risk scoring
+1. **Detection** — DistilBERT-powered email/SMS risk scoring
 2. **Analysis** — Psychological trigger identification and plain-language explanation
 3. **Prevention** — Community-driven shared threat intelligence *(in development)*
 
@@ -28,10 +28,16 @@ The platform is built on three pillars:
 project-osa/
 │
 ├── app.py                          # FastAPI app — web UI + JSON API
-├── train_email_model.py            # Model training script (run once)
+├── train_email_model.py            # Baseline model training script
 ├── osa_email_api.py                # Standalone JSON API (no UI)
 ├── spam email web app.ipynb        # Research notebook (experimentation)
 ├── ML_email_model_documentation.md # Full ML component documentation
+│
+├── osa_distilbert_model/           # Fine-tuned DistilBERT model (not in repo)
+│   ├── config.json
+│   ├── model.safetensors
+│   ├── tokenizer.json
+│   └── tokenizer_config.json
 │
 ├── templates/
 │   └── index.html                  # Jinja2 web UI template
@@ -43,8 +49,8 @@ project-osa/
 └── README.md                       # This file
 ```
 
-> **Note:** Model files (`*.pkl`) and datasets (`*.csv`) are excluded from the repo
-> via `.gitignore` due to file size. See setup instructions below to generate them locally.
+> **Note:** Model files (`*.pkl`, `osa_distilbert_model/`) and datasets (`*.csv`) are excluded
+> from the repo via `.gitignore` due to file size. Contact the ML team for access.
 
 ---
 
@@ -65,26 +71,32 @@ venv\Scripts\activate           # Windows
 
 ### 3. Install dependencies
 ```bash
-pip install fastapi uvicorn joblib scikit-learn pandas jinja2 python-multipart
+pip install fastapi uvicorn torch transformers pandas jinja2 python-multipart
 ```
 
-### 4. Add the datasets
-Place these two files in the project root folder:
-- `spam.csv` — SMS spam dataset (columns: `Category`, `Message`)
-- `Phishing_Email.csv` — Phishing email dataset (columns: `Email Text`, `Email Type`)
+> For CPU-only machines (no GPU), install a lighter version of torch:
+> ```bash
+> pip install torch --index-url https://download.pytorch.org/whl/cpu
+> pip install transformers fastapi uvicorn pandas jinja2 python-multipart
+> ```
 
-> Contact the ML team if you need access to the datasets.
-
-### 5. Train the model (once)
-```bash
-python train_email_model.py
+### 4. Get the DistilBERT model
+Contact the ML team to get the `osa_distilbert_model` folder and place it in the project root:
 ```
-This generates `email_spam_detection.pkl` and `vectorizer.pkl` in the project folder.
+project-osa/
+└── osa_distilbert_model/
+    ├── config.json
+    ├── model.safetensors
+    ├── tokenizer.json
+    └── tokenizer_config.json
+```
 
-### 6. Run the app
+### 5. Run the app
 ```bash
 uvicorn app:app --reload --host 127.0.0.1 --port 8000
 ```
+
+Open in browser: **http://127.0.0.1:8000**
 
 ---
 
@@ -95,7 +107,7 @@ uvicorn app:app --reload --host 127.0.0.1 --port 8000
 | `GET` | `/` | Web UI — paste a message and check risk |
 | `POST` | `/predict` | Form submission — returns HTML result |
 | `POST` | `/predict_email` | JSON API — for programmatic use |
-| `GET` | `/health` | Health check |
+| `GET` | `/health` | Health check + model version |
 
 ### JSON API Example
 
@@ -110,7 +122,7 @@ curl -X POST http://127.0.0.1:8000/predict_email \
 ```json
 {
   "prediction": "spam",
-  "spam_probability": 0.9337,
+  "spam_probability": 0.9821,
   "threshold": 0.3,
   "triggers": [
     {
@@ -136,14 +148,29 @@ curl -X POST http://127.0.0.1:8000/predict_email \
 
 ## 🤖 ML Model Details
 
+### Current Model — DistilBERT (v3.0.0)
+
+| Component | Details |
+|-----------|---------|
+| Algorithm | DistilBERT (fine-tuned) |
+| Base model | `distilbert-base-uncased` |
+| Training data | spam.csv + Phishing_Email.csv (22,694 rows) |
+| Epochs | 3 |
+| Accuracy | 0.9846 |
+| Precision | 0.9824 |
+| Recall | 0.9688 |
+| F1 | 0.9755 |
+| PR-AUC | 0.9976 |
+| Threshold | 0.30 (tuned for high recall) |
+
+### Previous Model — Logistic Regression (v2.0.0)
+
 | Component | Details |
 |-----------|---------|
 | Algorithm | Logistic Regression |
 | Vectorizer | FeatureUnion (Word TF-IDF + Character TF-IDF) |
-| Training data | spam.csv + Phishing_Email.csv (22,694 rows) |
 | Accuracy | 0.9797 |
 | PR-AUC | 0.9940 |
-| Threshold | 0.30 (tuned for high recall) |
 
 ### Psychological Triggers Detected
 | Trigger | Description |
@@ -162,10 +189,12 @@ curl -X POST http://127.0.0.1:8000/predict_email \
 
 - [x] Logistic Regression baseline model
 - [x] Dual TF-IDF vectorizer (word + character level)
+- [x] Combined spam + phishing dataset (22,694 rows)
 - [x] FastAPI web UI + JSON API
-- [x] Psychological trigger detection
-- [x] Plain-language explanations
-- [ ] BERT/transformer model fine-tuning
+- [x] Psychological trigger detection (5 triggers)
+- [x] Plain-language explanations for non-technical users
+- [x] DistilBERT fine-tuned model (PR-AUC: 0.9976)
+- [ ] Smart Agent conversational logic
 - [ ] URL detector module
 - [ ] Community threat reporting space
 - [ ] Real-time threat map dashboard

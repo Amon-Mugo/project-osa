@@ -12,32 +12,39 @@ os.environ.setdefault("VECLIB_MAXIMUM_THREADS", "1")
 os.environ.setdefault("NUMEXPR_NUM_THREADS", "1")
 
 import re
-import joblib
+import torch
+from transformers import DistilBertTokenizerFast, DistilBertForSequenceClassification
 from fastapi import FastAPI, Request, Form
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from starlette.templating import Jinja2Templates
 
-BASE_DIR        = Path(__file__).resolve().parent
-TEMPLATES_DIR   = BASE_DIR / "templates"
-STATIC_DIR      = BASE_DIR / "static"
-MODEL_PATH      = BASE_DIR / "email_spam_detection.pkl"
-VECTORIZER_PATH = BASE_DIR / "vectorizer.pkl"
+# ── Paths ─────────────────────────────────────────────────────────────────────
+BASE_DIR      = Path(__file__).resolve().parent
+TEMPLATES_DIR = BASE_DIR / "templates"
+STATIC_DIR    = BASE_DIR / "static"
+MODEL_DIR     = BASE_DIR / "osa_distilbert_model"
 
-if not MODEL_PATH.exists() or not VECTORIZER_PATH.exists():
+if not MODEL_DIR.exists():
     raise FileNotFoundError(
-        "\n[ERROR] Model files not found.\n"
-        "Run first:  python train_email_model.py\n"
-        f"Expected:   {MODEL_PATH}\n"
-        f"            {VECTORIZER_PATH}"
+        "\n[ERROR] DistilBERT model folder not found.\n"
+        f"Expected: {MODEL_DIR}\n"
+        "Download it from Google Drive and extract it into your project folder."
     )
 
-model      = joblib.load(MODEL_PATH)
-vectorizer = joblib.load(VECTORIZER_PATH)
+# ── Load DistilBERT ───────────────────────────────────────────────────────────
+print("Loading DistilBERT model...")
+device     = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+tokenizer  = DistilBertTokenizerFast.from_pretrained(str(MODEL_DIR))
+bert_model = DistilBertForSequenceClassification.from_pretrained(str(MODEL_DIR))
+bert_model.to(device)
+bert_model.eval()
+print(f"Model loaded on: {device}")
 
 THRESHOLD = 0.30
 
+# ── Psychological Trigger Definitions ─────────────────────────────────────────
 TRIGGERS = {
     "urgency": {
         "label":       "Urgency",
@@ -84,7 +91,7 @@ TRIGGERS = {
         "description": "Uses threats or fear to force you into taking action",
         "keywords": [
             r"\bsuspended\b", r"\bsuspension\b", r"\bterminated\b",
-            r"\bblocked\b", r"\bclosed\b", r"\blocked\b",
+            r"\bblocked\b", r"\bclosed\b",
             r"\bfinal warning\b", r"\blegal action\b", r"\blawsuit\b",
             r"\barrest\b", r"\bpolice\b", r"\bpenalty\b", r"\bfine\b",
             r"\bwarning\b", r"\baccount (will be|has been) (closed|suspended|blocked)\b",
@@ -110,14 +117,12 @@ TRIGGERS = {
 
 
 def detect_triggers(message: str) -> list[dict]:
-    """Return list of triggered psychological patterns found in the message."""
-    text    = message.lower()
-    found   = []
+    text  = message.lower()
+    found = []
     for key, trigger in TRIGGERS.items():
         matched_keywords = []
         for pattern in trigger["keywords"]:
             if re.search(pattern, text):
-                # Extract readable keyword from pattern for display
                 readable = pattern.replace(r"\b", "").replace("?", "").replace("\\", "")
                 matched_keywords.append(readable.strip())
         if matched_keywords:
@@ -126,13 +131,12 @@ def detect_triggers(message: str) -> list[dict]:
                 "label":       trigger["label"],
                 "icon":        trigger["icon"],
                 "description": trigger["description"],
-                "matches":     matched_keywords[:3],  # show max 3 matched keywords
+                "matches":     matched_keywords[:3],
             })
     return found
 
 
 def build_explanation(label: str, triggers: list[dict]) -> str:
-    """Generate a plain-English explanation for non-technical users."""
     if label == "ham":
         return "This message appears safe. No significant warning signs were detected."
 
@@ -160,11 +164,22 @@ def build_explanation(label: str, triggers: list[dict]) -> str:
 
 
 def classify(message: str) -> dict:
-    """Run model + trigger detection and return full result."""
-    X        = vectorizer.transform([message])
-    proba    = model.predict_proba(X)[0, 1]
-    label    = "spam" if proba >= THRESHOLD else "ham"
-    triggers = detect_triggers(message) if label == "spam" else []
+    """Run DistilBERT inference + trigger detection and return full result."""
+    inputs = tokenizer(
+        message,
+        return_tensors="pt",
+        truncation=True,
+        padding=True,
+        max_length=256
+    )
+    inputs = {k: v.to(device) for k, v in inputs.items()}
+
+    with torch.no_grad():
+        outputs = bert_model(**inputs)
+        proba   = torch.softmax(outputs.logits, dim=1)[0, 1].item()
+
+    label       = "spam" if proba >= THRESHOLD else "ham"
+    triggers    = detect_triggers(message) if label == "spam" else []
     explanation = build_explanation(label, triggers)
 
     return {
@@ -176,8 +191,8 @@ def classify(message: str) -> dict:
     }
 
 
-
-app = FastAPI(title="OSA Email Risk Checker", version="2.0.0")
+# ── App ───────────────────────────────────────────────────────────────────────
+app = FastAPI(title="OSA Email Risk Checker", version="3.0.0")
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
@@ -208,14 +223,14 @@ def predict(request: Request, message: str = Form(...)):
     )
 
 
-# JSON API 
+# ── JSON API ──────────────────────────────────────────────────────────────────
 class EmailIn(BaseModel):
     message: str
 
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    return {"status": "ok", "model": "DistilBERT", "version": "3.0.0"}
 
 
 @app.post("/predict_email")
@@ -232,16 +247,8 @@ def predict_email(data: EmailIn):
             "prediction": "spam",
             "spam_probability": 0.87,
             "threshold": 0.3,
-            "triggers": [
-                {
-                    "key": "urgency",
-                    "label": "Urgency",
-                    "icon": "⏰",
-                    "description": "Pressures you to act immediately without thinking",
-                    "matches": ["act now", "expires"]
-                }
-            ],
-            "explanation": "This message is risky because it uses urgency..."
+            "triggers": [...],
+            "explanation": "This message is risky because..."
         }
     """
     return classify(data.message)
