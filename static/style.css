@@ -225,3 +225,53 @@ header h1 {
     color: #fde68a;
     line-height: 1.6;
 }
+
+/* ── Scam Type Badge ────────────────────────────────────────────────────── */
+.scam-type-badge {
+    display: inline-block;
+    background: rgba(248, 113, 113, 0.1);
+    border: 1px solid rgba(248, 113, 113, 0.3);
+    border-radius: 99px;
+    padding: 0.3rem 0.9rem;
+    font-size: 0.85rem;
+    color: #fca5a5;
+    margin-bottom: 1rem;
+}
+
+/* ── Smart Agent Box ────────────────────────────────────────────────────── */
+.agent-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 600;
+    font-size: 0.85rem;
+    margin-bottom: 0.5rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.agent-text {
+    margin: 0;
+    line-height: 1.7;
+}
+
+.engine-badge {
+    font-size: 0.7rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 99px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.engine-ai {
+    background: rgba(99, 179, 237, 0.15);
+    border: 1px solid rgba(99, 179, 237, 0.3);
+    color: #90cdf4;
+}
+
+.engine-rule {
+    background: rgba(160, 160, 160, 0.15);
+    border: 1px solid rgba(160, 160, 160, 0.3);
+    color: #a0a0a0;
+}

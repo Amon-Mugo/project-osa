@@ -28,6 +28,13 @@
                 {% if prediction == 'spam' %}⚠ SPAM / PHISHING DETECTED{% else %}✔ SAFE{% endif %}
             </p>
 
+            <!-- Scam type badge (only for spam) -->
+            {% if prediction == 'spam' and scam_type %}
+            <div class="scam-type-badge">
+                🔍 Scam Type: <strong>{{ scam_type }}</strong>
+            </div>
+            {% endif %}
+
             <!-- Probability bar -->
             <div class="prob-bar-wrap">
                 <div class="prob-bar" style="width: {{ (spam_probability * 100) | round | int }}%;
@@ -36,9 +43,17 @@
             </div>
             <p class="meta">Spam probability: <strong>{{ spam_probability }}</strong> &nbsp;|&nbsp; Threshold: <strong>{{ threshold }}</strong></p>
 
-            <!-- Plain English explanation -->
+            <!-- Smart Agent explanation -->
             <div class="explanation {% if prediction == 'spam' %}explanation-spam{% else %}explanation-ham{% endif %}">
-                {{ explanation }}
+                <div class="agent-header">
+                    🤖 Smart Agent
+                    {% if engine %}
+                    <span class="engine-badge {% if engine == 'gemini' %}engine-ai{% else %}engine-rule{% endif %}">
+                        {{ "AI Powered" if engine == "gemini" else "Rule-Based" }}
+                    </span>
+                    {% endif %}
+                </div>
+                <p class="agent-text">{{ explanation }}</p>
             </div>
 
             <!-- Triggers (only shown for spam) -->

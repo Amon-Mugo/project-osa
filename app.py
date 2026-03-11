@@ -19,8 +19,8 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from starlette.templating import Jinja2Templates
+from smart_agent import get_smart_agent_explanation
 
-# ── Paths ─────────────────────────────────────────────────────────────────────
 BASE_DIR      = Path(__file__).resolve().parent
 TEMPLATES_DIR = BASE_DIR / "templates"
 STATIC_DIR    = BASE_DIR / "static"
@@ -33,7 +33,6 @@ if not MODEL_DIR.exists():
         "Download it from Google Drive and extract it into your project folder."
     )
 
-# ── Load DistilBERT ───────────────────────────────────────────────────────────
 print("Loading DistilBERT model...")
 device     = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 tokenizer  = DistilBertTokenizerFast.from_pretrained(str(MODEL_DIR))
@@ -44,7 +43,6 @@ print(f"Model loaded on: {device}")
 
 THRESHOLD = 0.30
 
-# ── Psychological Trigger Definitions ─────────────────────────────────────────
 TRIGGERS = {
     "urgency": {
         "label":       "Urgency",
@@ -136,35 +134,7 @@ def detect_triggers(message: str) -> list[dict]:
     return found
 
 
-def build_explanation(label: str, triggers: list[dict]) -> str:
-    if label == "ham":
-        return "This message appears safe. No significant warning signs were detected."
-
-    if not triggers:
-        return (
-            "Our model flagged this message as potentially risky based on its "
-            "overall pattern, even though no specific warning keywords were found. "
-            "Exercise caution."
-        )
-
-    trigger_names = [t["label"].lower() for t in triggers]
-
-    if len(trigger_names) == 1:
-        combo = trigger_names[0]
-    elif len(trigger_names) == 2:
-        combo = f"{trigger_names[0]} and {trigger_names[1]}"
-    else:
-        combo = ", ".join(trigger_names[:-1]) + f", and {trigger_names[-1]}"
-
-    return (
-        f"This message is risky because it uses {combo}. "
-        "Scammers use these tactics to pressure people into acting without thinking. "
-        "Do not click any links, share personal details, or send money."
-    )
-
-
 def classify(message: str) -> dict:
-    """Run DistilBERT inference + trigger detection and return full result."""
     inputs = tokenizer(
         message,
         return_tensors="pt",
@@ -178,22 +148,28 @@ def classify(message: str) -> dict:
         outputs = bert_model(**inputs)
         proba   = torch.softmax(outputs.logits, dim=1)[0, 1].item()
 
-    label       = "spam" if proba >= THRESHOLD else "ham"
-    triggers    = detect_triggers(message) if label == "spam" else []
-    explanation = build_explanation(label, triggers)
+    label    = "spam" if proba >= THRESHOLD else "ham"
+    triggers = detect_triggers(message) if label == "spam" else []
+
+    agent_result = get_smart_agent_explanation(
+        message     = message,
+        prediction  = label,
+        probability = proba,
+        triggers    = triggers,
+    )
 
     return {
         "prediction":       label,
         "spam_probability": float(round(proba, 4)),
         "threshold":        THRESHOLD,
         "triggers":         triggers,
-        "explanation":      explanation,
+        "explanation":      agent_result["explanation"],
+        "scam_type":        agent_result["scam_type"],
+        "engine":           agent_result["engine"],
     }
 
 
-# ── App ───────────────────────────────────────────────────────────────────────
-app = FastAPI(title="OSA Email Risk Checker", version="3.0.0")
-
+app = FastAPI(title="OSA Email Risk Checker", version="4.0.0")
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
@@ -210,6 +186,8 @@ def home(request: Request):
             "threshold":        THRESHOLD,
             "triggers":         [],
             "explanation":      None,
+            "scam_type":        None,
+            "engine":           None,
         },
     )
 
@@ -223,32 +201,15 @@ def predict(request: Request, message: str = Form(...)):
     )
 
 
-# ── JSON API ──────────────────────────────────────────────────────────────────
 class EmailIn(BaseModel):
     message: str
 
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "model": "DistilBERT", "version": "3.0.0"}
+    return {"status": "ok", "model": "DistilBERT", "version": "4.0.0"}
 
 
 @app.post("/predict_email")
 def predict_email(data: EmailIn):
-    """
-    JSON API for programmatic use.
-
-    Request:
-        POST /predict_email
-        {"message": "Congratulations! You won a prize..."}
-
-    Response:
-        {
-            "prediction": "spam",
-            "spam_probability": 0.87,
-            "threshold": 0.3,
-            "triggers": [...],
-            "explanation": "This message is risky because..."
-        }
-    """
     return classify(data.message)
